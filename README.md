@@ -13,6 +13,7 @@ Packages requirement:
   - xlrd
 
 Running/testing environment
+<pre>
 .
 ├── data
 │   ├── somedata.xlsx
@@ -25,3 +26,4 @@ Running/testing environment
     ├── dataPrep.py
     ├── seqMod.py
     └── ...
+</pre>
