@@ -21,8 +21,6 @@ COL_NAMES = ('open',
             'close',)
 # ignore imcomplete column 'volume')
 
-DATA_FILES = '*.xlsx'
-
 class DataSet:
     """
     load data via pandas
@@ -111,9 +109,10 @@ class DataSet:
         print(self.ds['train'].groupby('result').size().reset_index(name='counts'))
         print(self.ds['valid'].groupby('result').size().reset_index(name='counts'))
 
-    def getDataSets(self, ds, n):
-        df = self.ds[ds].groupby('result',group_keys=False).apply(lambda x: x.sample(n, random_state=1)).sample(frac=1)
-        return np.stack(df['input'].values), keras.utils.to_categorical(df['result'].values, num_classes=NUM_CLASS)
+    def getDataSets(self, tn, vn):
+        dt = self.ds['train'].groupby('result',group_keys=False).apply(lambda x: x.sample(tn, random_state=1)).sample(frac=1)
+        dv = self.ds['valid'].groupby('result',group_keys=False).apply(lambda x: x.sample(vn, random_state=1)).sample(frac=1)
+        return np.stack(dt['input'].values), dt['result'].values, np.stack(dv['input'].values), dv['result'].values
 
 def classify(diff):
     if (diff > CLASS_PCT):
@@ -129,22 +128,24 @@ def classifyDiff(current, future):
     diff = ((float(future) - float(current)))/float(current)
     classify(diff)
 
-def readDataFromFile(files, tn, vn)
+def readDataFromFile(files):
     ds = DataSet(index_col = 'time',
             names = COL_NAMES,
             usecols = 'c:g',
             # ignore imcomplete column 'volume' usecols = 'c:g,i',
             skiprows = 1)
-    files = glob.glob(DATA_FILES)
     for f in files:
         # take file name as dataset label
         ds.readExcelFile(f, f[:f.index('.')])
     ds.preprocess()
-    return ds.getDataSets('train', tn), ds.getDataSets('valid', vn)
+    return ds
 
 if __name__ == '__main__':
-    train_data, train_label, valid_data, valid_label = readDataFromFile(glob.glob(DATA_FILES), 10, 2)
+    data_files = '*.xlsx'
+    ds = readDataFromFile(glob.glob(data_files))
+    train_data, train_label, valid_data, valid_label = ds.getDataSets(10, 2)
     print(train_data[0])
     print(train_data[-1])
     print(len(train_data))
     print(len(valid_data))
+
