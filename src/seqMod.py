@@ -16,7 +16,7 @@ LOG_NAME = f"{dataPrep.RETRO_LEN}-RETRO-{dataPrep.CLASS_PCT}-CLP-{int(time.time(
 
 if __name__ == '__main__':
     sampleSizeT, sampleSizeV = 800, 40
-    data_files = '*.xlsx'
+    data_files = 'data/*.xlsx'
     ds = dataPrep.readDataFromFile(glob.glob(data_files))
     train_data, train_label, valid_data, valid_label = ds.getDataSets(sampleSizeT, sampleSizeV)
     # consider keras.utils.to_categorical(label, num_classes=NUM_CLASS)

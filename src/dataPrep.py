@@ -5,6 +5,7 @@ Load and prepare dataset for training
 from collections import deque
 import glob
 import numpy as np
+import ntpath
 import pandas as pd
 import random
 from sklearn import preprocessing
@@ -99,7 +100,7 @@ class DataSet:
         leftlen = len(self.df)
         retro = deque(maxlen=RETRO_LEN)
         for i in self.df.values:
-            retro.append([n for n in i[:-1]])
+            retro.append(i[:-1])
             leftlen -= 1
             if (len(retro) == retro.maxlen):
                 if (leftlen > vdSize):
@@ -136,12 +137,13 @@ def readDataFromFile(files):
             skiprows = 1)
     for f in files:
         # take file name as dataset label
-        ds.readExcelFile(f, f[:f.index('.')])
+        name = ntpath.basename(f)
+        ds.readExcelFile(f, name[:name.index('.')])
     ds.preprocess()
     return ds
 
 if __name__ == '__main__':
-    data_files = '*.xlsx'
+    data_files = 'data/*.xlsx'
     ds = readDataFromFile(glob.glob(data_files))
     train_data, train_label, valid_data, valid_label = ds.getDataSets(10, 2)
     print(train_data[0])
