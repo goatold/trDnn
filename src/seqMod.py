@@ -10,12 +10,12 @@ import time
 
 import dataPrep
 
-EPOCHS = 8  # how many passes through our data
+EPOCHS = 16  # how many passes through our data
 BATCH_SIZE = 8  # how many batches? Try smaller batch if you're getting OOM (out of memory) errors.
 LOG_NAME = f"{dataPrep.RETRO_LEN}-RETRO-{dataPrep.CLASS_PCT}-CLP-{int(time.time())}"
 
 if __name__ == '__main__':
-    sampleSizeT, sampleSizeV = 800, 40
+    sampleSizeT, sampleSizeV = 712, 40
     data_files = 'data/*.xlsx'
     ds = dataPrep.readDataFromFile(glob.glob(data_files))
     train_data, train_label, valid_data, valid_label = ds.getDataSets(sampleSizeT, sampleSizeV)

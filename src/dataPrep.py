@@ -15,6 +15,7 @@ RETRO_LEN = 20
 CLASS_PCT = 0.01
 NUM_CLASS = 3
 VALIDATION_SET_PCT = 0.05
+PREDIC_DAYS = 1
 
 COL_NAMES = ('open', 
             'high',
@@ -68,25 +69,19 @@ class DataSet:
     def preprocess(self):
         # normalization with "from sklearn import preprocessing"
         #scaler = preprocessing.StandardScaler().fit(self.df.values)
-        scaler = preprocessing.MinMaxScaler().fit(self.df.values)
-        self.df = pd.DataFrame(scaler.transform(self.df.values), columns=self.df.columns, index=self.df.index)
-        #df[col] = preprocessing.scale(df[col].values)  # scale between 0 and 1
-        # calculate diff between close price of today and tomorrow
-        ''' ###
-        self.df['future'] = self.df[f'{TARGET}_close'].shift(-1)
-        self.df['target'] = list(map(classifyDiff, self.df[f'{TARGET}_close'], self.df['future']))
-        self.df[f'{TARGET}_change'] = self.df[f'{TARGET}_close'].pct_change()
-        '''
+        #scaler = preprocessing.MinMaxScaler().fit(self.df.values)
+        #self.df = pd.DataFrame(scaler.transform(self.df.values), columns=self.df.columns, index=self.df.index)
         for col in self.df.columns:
-            self.df[col] = self.df[col].pct_change()
             # print inif values for debugging purpose
-            # print(col, self.df[self.df[col] == np.inf])
-            self.df.replace([np.inf, -np.inf], np.nan, inplace=True)
-            self.df.dropna(inplace=True)
-            if (col == f'{TARGET}_close'):
-                self.df['target'] = list(map(classify, self.df[col]))
-            else:
-                self.df[col] = preprocessing.scale(self.df[col].values)
+            #print(col, self.df[self.df[col] == np.inf])
+            if (col != f'{TARGET}_close'):
+                self.df[col] = self.df[col].pct_change()
+                self.df.replace([np.inf, -np.inf], np.nan, inplace=True)
+                self.df.dropna(inplace=True)
+                self.df[col] = preprocessing.scale(self.df[col].values) # scale between 0 and 1
+        # calculate diff between close price of today and tomorrow
+        self.df['target'] = self.df[f'{TARGET}_close'].shift(-PREDIC_DAYS)
+        self.df['target'] = list(map(classifyDiff, self.df[f'{TARGET}_close'], self.df['target']))
         self.df = self.df.drop(f'{TARGET}_close', 1)  # already classified to 'target'
         self.df.dropna(inplace=True)
         # split validation dataset
@@ -127,7 +122,7 @@ def classifyDiff(current, future):
     if current == 0:
         return classify(0)
     diff = ((float(future) - float(current)))/float(current)
-    classify(diff)
+    return classify(diff)
 
 def readDataFromFile(files):
     ds = DataSet(index_col = 'time',
