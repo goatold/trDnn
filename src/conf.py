@@ -16,8 +16,8 @@ EXCEL_COL_TO_READ = 'c:g'
 data_files = 'data/*.xlsx'
 
 # model training conf
-EPOCHS = 16  # how many passes through our data
-BATCH_SIZE = 8  # how many batches? Try smaller batch if you're getting OOM (out of memory) errors.
+EPOCHS = 4  # how many passes through our data
+BATCH_SIZE = 16  # how many batches? Try smaller batch if you're getting OOM (out of memory) errors.
 LOG_NAME = f"{RETRO_LEN}-RETRO-{CLASS_PCT}-CLP-{time.strftime('%Y%m%d_%H%M%S',time.gmtime())}"
 
 trainDataBefore = '2018-09-30'

@@ -12,8 +12,6 @@ import conf
 
 if __name__ == '__main__':
     ds = dataPrep.readDataFromFile(glob.glob(conf.data_files), conf.COL_NAMES, conf.EXCEL_COL_TO_READ)
-    ds.getTargetData(conf.TARGET_TABLE, conf.TARGET_COL, conf.PREDIC_DAYS)
-    ds.retroHist(20, conf.TARGET_TABLE)
     train_data, train_label = ds.getDataSets(-conf.sampleSizeT, conf.trainDataBefore)
     valid_data, valid_label = ds.getDataSets(conf.sampleSizeV, conf.validDataAfter)
     # consider keras.utils.to_categorical(label, num_classes=NUM_CLASS)

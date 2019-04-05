@@ -48,12 +48,14 @@ class DataSet:
         df.dropna(inplace=True)
         self.rDfs[table] = df
 
-    def getTargetData(self, table, col, pred):
+    def getTargetData(self, table, pred):
         df = self.rDfs[table]
         self.targetDf = pd.DataFrame(df[self.target_col].shift(-pred), index=df.index)
         # calculate target column
         self.targetDf['target'] = list(map(classifyDiff, df[self.target_col], self.targetDf[self.target_col]))
         self.targetDf.dropna(inplace=True)
+        print(self.targetDf.head(3))
+        print(self.targetDf.tail(3))
         print(f'target: {self.targetDf.index.min()} ~ {self.targetDf.index.max()} -- {len(self.targetDf.index)}')
 
     def preprocess(self):
@@ -126,18 +128,23 @@ def readDataFromFile(files, colNames, cols):
         # take file name as dataset label
         name = ntpath.basename(f)
         ds.readExcelFile(f, name[:name.index('.')], cols)
+    ds.getTargetData(conf.TARGET_TABLE, 1)
     ds.preprocess()
+    ds.retroHist(conf.RETRO_LEN, conf.TARGET_TABLE)
+    # remove defact data
+    ds.targetDf.drop(ds.targetDf.index.difference(ds.histDf.index), inplace=True)
+    ds.histDf.drop(ds.histDf.index.difference(ds.targetDf.index), inplace=True)
+    print(ds.targetDf.head(3))
+    print(ds.histDf.head(3))
     return ds
 
 if __name__ == '__main__':
     data_files = 'data/*.xlsx'
     ds = readDataFromFile(glob.glob(data_files), conf.COL_NAMES, conf.EXCEL_COL_TO_READ)
-    ds.getTargetData('hs300', 'close', 1)
-    ds.retroHist(20, 'hs300')
     train_data, train_label = ds.getDataSets(-3, '2018-10-31')
     valid_data, valid_label = ds.getDataSets(3, '2018-11-01')
-    print(train_data)
+    #print(train_data)
     print(train_label)
-    print(valid_data)
+    #print(valid_data)
     print(valid_label)
 
