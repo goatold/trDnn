@@ -8,20 +8,9 @@ import numpy as np
 import ntpath
 import pandas as pd
 import random
-from sklearn import preprocessing
+#from sklearn import preprocessing
 
-TARGET = "hs300"
-RETRO_LEN = 20
-CLASS_PCT = 0.01
-NUM_CLASS = 3
-VALIDATION_SET_PCT = 0.05
-PREDIC_DAYS = 1
-
-COL_NAMES = ('open', 
-            'high',
-            'low',
-            'close',)
-# ignore imcomplete column 'volume')
+import conf
 
 class DataSet:
     """
@@ -30,90 +19,97 @@ class DataSet:
     """
 
     def __init__(self,
-            headers = None,
-            names = None,
-            usecols = None,
-            index_col = 'time',
-            skiprows = 0):
+            colNames,
+            index_col = 0,
+            base_col = -1,
+            target_col = -1,
+            skiprows = 1):
         """
         initialize with datafile parse parameters
         """
-        self.headers = headers
-        self.fieldnames = names
-        self.index_col = index_col
-        self.usecols = usecols
+        self.colNames = colNames
+        self.index_col = colNames[index_col]
+        self.base_col = colNames[base_col]
+        self.target_col = colNames[target_col]
         self.skiprows = skiprows
-        self.df = None
-        self.ds = {'train': pd.DataFrame(columns=('result', 'input')),
-                   'valid': pd.DataFrame(columns=('result', 'input'))}
+        self.rDfs = {}
 
         
-    def readExcelFile(self, path, name):
+    def readExcelFile(self, path, table, cols):
         """
         read data from excel file
         """
         df = pd.read_excel(path,
-                           names=[self.index_col] + [f'{name}_{fn}' for fn in self.fieldnames],
-                           usecols=self.usecols,
+                           names=self.colNames,
+                           usecols=cols,
                            skiprows=self.skiprows,
-                           headers=self.headers,
                            parse_dates=True)
         df.set_index(self.index_col, inplace=True) 
-        #df.fillna(method="ffill", inplace=True)
         df.dropna(inplace=True)
-        if (self.df is None):
-            self.df = df
-        else:
-            self.df = self.df.join(df)
+        self.rDfs[table] = df
+
+    def getTargetData(self, table, col, pred):
+        df = self.rDfs[table]
+        self.targetDf = pd.DataFrame(df[self.target_col].shift(-pred), index=df.index)
+        # calculate target column
+        self.targetDf['target'] = list(map(classifyDiff, df[self.target_col], self.targetDf[self.target_col]))
+        self.targetDf.dropna(inplace=True)
+        print(f'target: {self.targetDf.index.min()} ~ {self.targetDf.index.max()} -- {len(self.targetDf.index)}')
 
     def preprocess(self):
-        # normalization with "from sklearn import preprocessing"
-        #scaler = preprocessing.StandardScaler().fit(self.df.values)
-        #scaler = preprocessing.MinMaxScaler().fit(self.df.values)
-        #self.df = pd.DataFrame(scaler.transform(self.df.values), columns=self.df.columns, index=self.df.index)
-        for col in self.df.columns:
-            # print inif values for debugging purpose
-            #print(col, self.df[self.df[col] == np.inf])
-            if (col != f'{TARGET}_close'):
-                self.df[col] = self.df[col].pct_change()
-                self.df.replace([np.inf, -np.inf], np.nan, inplace=True)
-                self.df.dropna(inplace=True)
-                self.df[col] = preprocessing.scale(self.df[col].values) # scale between 0 and 1
-        # calculate diff between close price of today and tomorrow
-        self.df['target'] = self.df[f'{TARGET}_close'].shift(-PREDIC_DAYS)
-        self.df['target'] = list(map(classifyDiff, self.df[f'{TARGET}_close'], self.df['target']))
-        self.df = self.df.drop(f'{TARGET}_close', 1)  # already classified to 'target'
-        self.df.dropna(inplace=True)
-        # split validation dataset
-        vdSize = int(len(self.df)*VALIDATION_SET_PCT)
-        # generate hist retro sequences
-        self.retroHist(vdSize)
+        for df in self.rDfs.values():
+            # take value of next row as ratio base
+            df['base'] = df[self.base_col].shift(1)
+            df.dropna(inplace=True)
+            for col in df.columns[:-1]:
+                # in/decrease ratio
+                df[col] = df[col]/df['base'] - 1
+                df.replace([np.inf, -np.inf], np.nan, inplace=True)
+                df.dropna(inplace=True)
+            df.drop(columns=['base'], inplace=True)
 
-    def retroHist(self, vdSize):
-        # sort data according to classification
-        # and split in training and validation data set
-        leftlen = len(self.df)
-        retro = deque(maxlen=RETRO_LEN)
-        for i in self.df.values:
-            retro.append(i[:-1])
-            leftlen -= 1
+    def retroHist(self, retroLen, kTable):
+        # join all tables
+        df = self.rDfs[kTable]
+        for t in self.rDfs.keys():
+            if t == kTable:
+                continue
+            df = df.join(self.rDfs[t], sort=True, rsuffix=f'_{t}')
+            df.dropna(inplace=True)
+        retro = deque(maxlen=retroLen)
+        histDf = pd.DataFrame(columns=('time','data'))
+        histDf.set_index('time', inplace=True)
+        for r in df.iterrows():
+            retro.append(list(r[1]))
             if (len(retro) == retro.maxlen):
-                if (leftlen > vdSize):
-                    self.ds['train'] = self.ds['train'].append({'result' : i[-1], 'input' : np.array(retro)}, ignore_index=True)
-                else:
-                    self.ds['valid'] = self.ds['valid'].append({'result' : i[-1], 'input' : np.array(retro)}, ignore_index=True)
-        print(self.ds['train'].groupby('result').size().reset_index(name='counts'))
-        print(self.ds['valid'].groupby('result').size().reset_index(name='counts'))
+                histDf.loc[r[0]] = {'data' : np.array(retro)}
+        self.histDf = histDf.sort_index()
+        print(f'hist: {histDf.index.min()} ~ {histDf.index.max()} -- {len(histDf.index)}')
 
-    def getDataSets(self, tn, vn):
-        dt = self.ds['train'].groupby('result',group_keys=False).apply(lambda x: x.sample(tn, random_state=1)).sample(frac=1)
-        dv = self.ds['valid'].groupby('result',group_keys=False).apply(lambda x: x.sample(vn, random_state=1)).sample(frac=1)
-        return np.stack(dt['input'].values), dt['result'].values, np.stack(dv['input'].values), dv['result'].values
+    def getHist(self, n=1, date=None):
+        if n > 0:
+            # first n records after date inclusive
+            return self.histDf.loc[pd.to_datetime(date):].first(f'{n}d')
+        elif n < 0:
+            # last n records before date inclusive
+            return self.histDf.loc[:pd.to_datetime(date)].last(f'{-n}d')
+        else:
+            return self.histDf
+
+    def getDataSets(self, n, date=None):
+        df = self.histDf
+        if n > 0:
+            df = self.histDf.loc[pd.to_datetime(date):].sample(n, random_state=1)
+        elif n < 0:
+            df = self.histDf.loc[:pd.to_datetime(date)].sample(-n, random_state=1)
+        df = df.join(self.targetDf)
+        df.dropna(inplace=True)
+        return np.stack(df['data'].values), df['target'].values
 
 def classify(diff):
-    if (diff > CLASS_PCT):
+    if (diff > conf.CLASS_PCT):
         return int(2)
-    elif (diff < -CLASS_PCT):
+    elif (diff < -conf.CLASS_PCT):
         return int(0)
     else:
         return int(1)
@@ -124,25 +120,24 @@ def classifyDiff(current, future):
     diff = ((float(future) - float(current)))/float(current)
     return classify(diff)
 
-def readDataFromFile(files):
-    ds = DataSet(index_col = 'time',
-            names = COL_NAMES,
-            usecols = 'c:g',
-            # ignore imcomplete column 'volume' usecols = 'c:g,i',
-            skiprows = 1)
+def readDataFromFile(files, colNames, cols):
+    ds = DataSet(colNames)
     for f in files:
         # take file name as dataset label
         name = ntpath.basename(f)
-        ds.readExcelFile(f, name[:name.index('.')])
+        ds.readExcelFile(f, name[:name.index('.')], cols)
     ds.preprocess()
     return ds
 
 if __name__ == '__main__':
     data_files = 'data/*.xlsx'
-    ds = readDataFromFile(glob.glob(data_files))
-    train_data, train_label, valid_data, valid_label = ds.getDataSets(10, 2)
-    print(train_data[0])
-    print(train_data[-1])
-    print(len(train_data))
-    print(len(valid_data))
+    ds = readDataFromFile(glob.glob(data_files), conf.COL_NAMES, conf.EXCEL_COL_TO_READ)
+    ds.getTargetData('hs300', 'close', 1)
+    ds.retroHist(20, 'hs300')
+    train_data, train_label = ds.getDataSets(-3, '2018-10-31')
+    valid_data, valid_label = ds.getDataSets(3, '2018-11-01')
+    print(train_data)
+    print(train_label)
+    print(valid_data)
+    print(valid_label)
 

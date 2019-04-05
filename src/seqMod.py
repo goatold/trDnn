@@ -6,43 +6,38 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, LSTM, CuDNNLSTM, BatchNormalization
 from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.callbacks import ModelCheckpoint, ModelCheckpoint
-import time
 
 import dataPrep
-
-EPOCHS = 16  # how many passes through our data
-BATCH_SIZE = 8  # how many batches? Try smaller batch if you're getting OOM (out of memory) errors.
-LOG_NAME = f"{dataPrep.RETRO_LEN}-RETRO-{dataPrep.CLASS_PCT}-CLP-{int(time.time())}"
+import conf
 
 if __name__ == '__main__':
-    sampleSizeT, sampleSizeV = 712, 40
-    data_files = 'data/*.xlsx'
-    ds = dataPrep.readDataFromFile(glob.glob(data_files))
-    train_data, train_label, valid_data, valid_label = ds.getDataSets(sampleSizeT, sampleSizeV)
+    ds = dataPrep.readDataFromFile(glob.glob(conf.data_files), conf.COL_NAMES, conf.EXCEL_COL_TO_READ)
+    ds.getTargetData(conf.TARGET_TABLE, conf.TARGET_COL, conf.PREDIC_DAYS)
+    ds.retroHist(20, conf.TARGET_TABLE)
+    train_data, train_label = ds.getDataSets(-conf.sampleSizeT, conf.trainDataBefore)
+    valid_data, valid_label = ds.getDataSets(conf.sampleSizeV, conf.validDataAfter)
     # consider keras.utils.to_categorical(label, num_classes=NUM_CLASS)
 
     # create sequential model with 3 LSTM layers and 2 Dense layers
     # we may replace LSTM with CuDNNLSTM for GPU
-    dropRatio = 0.02
-    lstmOutSize = 128
     model = Sequential()
-    model.add(LSTM(lstmOutSize, input_shape=(train_data.shape[1:]), return_sequences=True))
+    model.add(LSTM(conf.lstmOutSize, input_shape=(train_data.shape[1:]), return_sequences=True))
     # helps prevent overfitting
-    model.add(Dropout(rate=dropRatio))
+    model.add(Dropout(rate=conf.dropRatio))
     model.add(BatchNormalization())
 
-    model.add(LSTM(lstmOutSize, return_sequences=True))
-    model.add(Dropout(dropRatio))
+    model.add(LSTM(conf.lstmOutSize, return_sequences=True))
+    model.add(Dropout(conf.dropRatio))
     model.add(BatchNormalization())
 
-    model.add(LSTM(lstmOutSize))
-    model.add(Dropout(dropRatio))
+    model.add(LSTM(conf.lstmOutSize))
+    model.add(Dropout(conf.dropRatio))
     model.add(BatchNormalization())
 
     model.add(Dense(32, activation='relu'))
-    model.add(Dropout(dropRatio))
+    model.add(Dropout(conf.dropRatio))
 
-    model.add(Dense(dataPrep.NUM_CLASS, activation='softmax'))
+    model.add(Dense(conf.NUM_CLASS, activation='softmax'))
 
 
     opt = tf.keras.optimizers.Adam(lr=0.001, decay=1e-6)
@@ -54,7 +49,7 @@ if __name__ == '__main__':
         metrics=['accuracy']
     )
 
-    tensorboard = TensorBoard(log_dir="logs/{}".format(LOG_NAME))
+    tensorboard = TensorBoard(log_dir="logs/{}".format(conf.LOG_NAME))
 
     # unique file name that will include the epoch and the validation acc for that epoch
     filepath = "trdnn-{epoch:02d}-{val_acc:.3f}"
@@ -64,8 +59,8 @@ if __name__ == '__main__':
     # Train model
     history = model.fit(
         train_data, train_label,
-        batch_size=BATCH_SIZE,
-        epochs=EPOCHS,
+        batch_size=conf.BATCH_SIZE,
+        epochs=conf.EPOCHS,
         validation_data=(valid_data, valid_label),
         callbacks=[tensorboard, checkpoint],
     )
@@ -75,7 +70,7 @@ if __name__ == '__main__':
     print('Test loss:', score[0])
     print('Test accuracy:', score[1])
     # Save model
-    model.save("models/{}".format(LOG_NAME))
+    model.save("models/{}".format(conf.LOG_NAME))
     # we may later load saved model to resume training or predict new data
     # model = load_model('path_to_model')
 
