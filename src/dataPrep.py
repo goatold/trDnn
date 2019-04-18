@@ -3,6 +3,7 @@
 Load and prepare dataset for training
 """
 from collections import deque
+import datetime
 import glob
 import numpy as np
 import ntpath
@@ -21,8 +22,8 @@ class DataSet:
     def __init__(self,
             colNames,
             index_col = 0,
-            base_col = -1,
-            target_col = -1,
+            base_col = -2,
+            target_col = -2,
             skiprows = 1):
         """
         initialize with datafile parse parameters
@@ -41,11 +42,13 @@ class DataSet:
         """
         df = pd.read_excel(path,
                            names=self.colNames,
+                           index_col=self.index_col,
                            usecols=cols,
                            skiprows=self.skiprows,
                            parse_dates=True)
-        df.set_index(self.index_col, inplace=True) 
         df.dropna(inplace=True)
+        # drop rows that don't have volume
+        df = df[df.volume != 0]
         self.rDfs[table] = df
 
     def getTargetData(self, table, pred):
@@ -60,10 +63,12 @@ class DataSet:
 
     def preprocess(self):
         for df in self.rDfs.values():
+            df['volume'] = df['volume'].pct_change()
             # take value of next row as ratio base
             df['base'] = df[self.base_col].shift(1)
             df.dropna(inplace=True)
-            for col in df.columns[:-1]:
+            # assume column 'volumn' is the second last
+            for col in df.columns[:-2]:
                 # in/decrease ratio
                 df[col] = df[col]/df['base'] - 1
                 df.replace([np.inf, -np.inf], np.nan, inplace=True)
@@ -106,6 +111,8 @@ class DataSet:
             df = self.histDf.loc[:pd.to_datetime(date)].sample(-n, random_state=1)
         df = df.join(self.targetDf)
         df.dropna(inplace=True)
+        print(f'time range: {df.index.min()} ~ {df.index.max()} -- {len(df.index)}')
+        print(df.head(3), df.tail(3))
         return np.stack(df['data'].values), df['target'].values
 
 def classify(diff):
@@ -134,16 +141,15 @@ def readDataFromFile(files, colNames, cols):
     # remove defact data
     ds.targetDf.drop(ds.targetDf.index.difference(ds.histDf.index), inplace=True)
     ds.histDf.drop(ds.histDf.index.difference(ds.targetDf.index), inplace=True)
-    print(ds.targetDf.head(3))
-    print(ds.histDf.head(3))
     return ds
 
 if __name__ == '__main__':
     data_files = 'data/*.xlsx'
     ds = readDataFromFile(glob.glob(data_files), conf.COL_NAMES, conf.EXCEL_COL_TO_READ)
-    train_data, train_label = ds.getDataSets(-3, '2018-10-31')
-    valid_data, valid_label = ds.getDataSets(3, '2018-11-01')
-    #print(train_data)
+    sdate = ds.histDf.index[-128]
+    train_data, train_label = ds.getDataSets(-3, sdate - datetime.timedelta(days=1))
+    valid_data, valid_label = ds.getDataSets(3, sdate)
+    print(sdate)
     print(train_label)
     #print(valid_data)
     print(valid_label)

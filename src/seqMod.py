@@ -16,24 +16,18 @@ if __name__ == '__main__':
     valid_data, valid_label = ds.getDataSets(conf.sampleSizeV, conf.validDataAfter)
     # consider keras.utils.to_categorical(label, num_classes=NUM_CLASS)
 
-    # create sequential model with 3 LSTM layers and 2 Dense layers
+    # create sequential model with m LSTM layers and n Dense layers
     # we may replace LSTM with CuDNNLSTM for GPU
     model = Sequential()
-    model.add(LSTM(conf.lstmOutSize, input_shape=(train_data.shape[1:]), return_sequences=True))
-    # helps prevent overfitting
-    model.add(Dropout(rate=conf.dropRatio))
-    model.add(BatchNormalization())
+    for i in range(conf.NUM_OF_LSTM):
+        model.add(LSTM(conf.lstmOutSize, input_shape=(train_data.shape[1:]), return_sequences=(i<conf.NUM_OF_LSTM-1)))
+        # helps prevent overfitting
+        model.add(Dropout(rate=conf.dropRatio))
+        model.add(BatchNormalization())
 
-    model.add(LSTM(conf.lstmOutSize, return_sequences=True))
-    model.add(Dropout(conf.dropRatio))
-    model.add(BatchNormalization())
-
-    model.add(LSTM(conf.lstmOutSize))
-    model.add(Dropout(conf.dropRatio))
-    model.add(BatchNormalization())
-
-    model.add(Dense(32, activation='relu'))
-    model.add(Dropout(conf.dropRatio))
+    for i in range(conf.NUM_OF_DENSE-1):
+        model.add(Dense(16, activation='relu'))
+        model.add(Dropout(rate=conf.dropRatio))
 
     model.add(Dense(conf.NUM_CLASS, activation='softmax'))
 
