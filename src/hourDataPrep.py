@@ -7,9 +7,10 @@ import ntpath
 import pandas as pd
 import random
 import sys
+from sklearn import preprocessing
 
 class HourDataPrep:
-    def __init__(self, retroLen=32, classPcnt=0.008, ahead=4):
+    def __init__(self, retroLen=64, classPcnt=0.01, ahead=4):
         self.retroLen = retroLen
         self.classPcnt = classPcnt
         self.ahead = ahead
@@ -42,15 +43,23 @@ class HourDataPrep:
         df.loc[df['close_chg'] <= -self.classPcnt, 'class'] = 0
         df.loc[df['close_chg'].between(-self.classPcnt, self.classPcnt, inclusive=False), 'class'] = 1
         df.loc[df['close_chg'] >= self.classPcnt, 'class'] = 2
+        # classify close price up/down
+        df.loc[df['close_chg'] <= 0, 'ud'] = 0
+        df.loc[df['close_chg'] > 0, 'ud'] = 1
         # normalize price to percent change to pre_close
         for col in df.columns[:4]:
             df[col] = df[col]/df['pre_close'] - 1
+            df.replace([np.inf, -np.inf], np.nan, inplace=True)
+            df.dropna(inplace=True)
+            df[col] = preprocessing.scale(df[col].values)
         # normalize vol to percent change to previouse entry
         df['vol'] = df['vol'].pct_change()
         df['vol'].fillna(1,inplace=True)
+        df.replace([np.inf, -np.inf], np.nan, inplace=True)
+        df.dropna(inplace=True)
+        df['vol'] = preprocessing.scale(df['vol'].values)
         # drop rows that don't have volume
         #df = df[df.vol != 0]
-        df.dropna(inplace=True)
 
         # create hist data frame
         histDf = pd.DataFrame(columns=('time','data'))
@@ -64,30 +73,36 @@ class HourDataPrep:
         # remove data without hist
         df.drop(df.index.difference(histDf.index), inplace=True)
         print(df.info(), histDf.info())
-        print(histDf.tail(1).values[0])
         print(df.head(), df.tail())
+        print(f'time range: {df.index.min()} ~ {df.index.max()} -- {len(df.index)}')
         self.df = df
         self.histDf = histDf
 
-    def getDataSets(self, n, date=None, dclass=None):
+    def getDataSets(self, beginDate=None, endDate=None, target=None, getUd=False):
         df = self.df
-        if n > 0:
-            df = df.loc[pd.to_datetime(date):]
-        elif n < 0:
-            df = df.loc[:pd.to_datetime(date)]
-        if (dclass is not None):
-            df = df.loc[df['class'] == dclass]
-        df = self.histDf.join(df['class'])
+        if beginDate is not None:
+            df = df.loc[pd.to_datetime(beginDate):]
+        if endDate is not None:
+            df = df.loc[:pd.to_datetime(endDate)]
+        if getUd:
+            df = self.histDf.join(df['ud'])
+        else:
+            df = self.histDf.join(df['class'])
+        labelName = df.columns[1]
+        if (target is not None):
+            df = df.loc[df[labelName] == target]
         df.dropna(inplace=True)
-        print(df.groupby('class').count())
-        df = df.sample(abs(n), random_state=1)
+        print(df.groupby(labelName).count())
+        df = df.sample(frac=1.0, random_state=1)
         print(f'time range: {df.index.min()} ~ {df.index.max()} -- {len(df.index)}')
-        print(df.head(), df.tail())
-        return np.stack(df['data'].values), df['class'].values
+        return np.stack(df['data'].values), df[labelName].values
 
 if __name__ == '__main__':
     hdf = HourDataPrep()
+    cutDate = '2019-01-01'
     hdf.readData('data/hs300_hours.xlsx', 'b:g,j')
-    hdf.getDataSets(128, '2019-03-08')
-    hdf.getDataSets(-9856,'2019-03-08')
-    hdf.getDataSets(32,'2019-03-08', dclass=2)
+    hdf.getDataSets(beginDate = '2015-01-01', endDate = cutDate)
+    hdf.getDataSets(beginDate = cutDate)
+    hdf.getDataSets(beginDate = cutDate, target=2)
+    hdf.getDataSets(beginDate = cutDate, getUd=True)
+
