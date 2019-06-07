@@ -23,6 +23,9 @@ class HourDataPrep:
                         parse_dates=True)
         df.dropna(inplace=True)
         df.sort_index(inplace=True)
+        # scale suplemental data
+        for col in df.columns[5:]:
+            df[col] = preprocessing.scale(df[col].values)
         # separate open transaction data
         dfo = df.at_time('09:30')
         df = df.between_time('10:00','15:00')
@@ -66,7 +69,10 @@ class HourDataPrep:
         histDf.set_index('time', inplace=True)
         # put last 64 entries to hist array
         retro = deque(maxlen=self.retroLen)
-        for r in df.filter(items=df.columns[:5]).iterrows():
+        dataCols = df.columns.values.tolist()
+        dataCols = dataCols[:5] + dataCols[6:16]
+        print(dataCols)
+        for r in df.filter(items=dataCols).iterrows():
             retro.append(list(r[1]))
             if (len(retro) == retro.maxlen):
                 histDf.loc[r[0]] = {'data' : np.array(retro)}
@@ -100,9 +106,10 @@ class HourDataPrep:
 if __name__ == '__main__':
     hdf = HourDataPrep()
     cutDate = '2019-01-01'
-    hdf.readData('data/hs300_hours.xlsx', 'b:g,j')
+    hdf.readData('data/hs300_hours_tech.xlsx', 'c:h,k:u')
     hdf.getDataSets(beginDate = '2015-01-01', endDate = cutDate)
     hdf.getDataSets(beginDate = cutDate)
     hdf.getDataSets(beginDate = cutDate, target=2)
-    hdf.getDataSets(beginDate = cutDate, getUd=True)
+    d,l = hdf.getDataSets(beginDate = cutDate, getUd=True)
+    print(d[0], l[0])
 

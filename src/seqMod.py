@@ -87,7 +87,7 @@ if __name__ == '__main__':
     # consider keras.utils.to_categorical(label, num_classes=NUM_CLASS)
 
     hdf = hourDataPrep.HourDataPrep(retroLen=128, classPcnt=0.008, ahead=8)
-    hdf.readData('data/hs300_hours.xlsx', 'b:g,j')
+    hdf.readData('data/hs300_hours_tech.xlsx', 'c:h,k:u')
     cutDate = '2019-01-01'
 
     model = trainModel(hdf, cutDate)
