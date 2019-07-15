@@ -53,9 +53,12 @@ def trainModel(df, cutDate, binResult=False):
     # saves only the best ones
     checkpoint = ModelCheckpoint(modelpath, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
 
-    valid_data, valid_label = df.getDataSets(beginDate = cutDate, getUd = binResult)
     train_data, train_label = df.getDataSets(endDate = cutDate, getUd = binResult)
-    labelSize = valid_label.max()+1
+    labelSize = train_label.max()+1
+    # take 5% of training data set as validation set
+    vSetSize = int(len(train_label) * .05)
+    valid_data, valid_label = train_data[:vSetSize], train_label[:vSetSize]
+    train_data, train_label = train_data[vSetSize:], train_label[vSetSize:]
 
     model = createSeqMod(train_data.shape[1:], labelSize)
 
@@ -75,8 +78,8 @@ def trainModel(df, cutDate, binResult=False):
     # print(model.input_shape)
     # score model with specific result class
     for i in range(int(labelSize)):
-        valid_data, valid_label = hdf.getDataSets(beginDate = cutDate, target=i)
-        score = model.evaluate(valid_data, valid_label, verbose=0)
+        test_data, test_label = hdf.getDataSets(beginDate = cutDate, target=i)
+        score = model.evaluate(test_data, test_label, verbose=0)
         print(f'Test{i} loss: {score[0]} accuracy: {score[1]}')
     return model
 
@@ -86,9 +89,10 @@ if __name__ == '__main__':
     #valid_data, valid_label = ds.getDataSets(conf.sampleSizeV, conf.validDataAfter)
     # consider keras.utils.to_categorical(label, num_classes=NUM_CLASS)
 
-    hdf = hourDataPrep.HourDataPrep(retroLen=128, classPcnt=0.008, ahead=8)
-    hdf.readData('data/hs300_hours_tech.xlsx', 'c:h,k:u')
-    cutDate = '2019-01-01'
+    hdf = hourDataPrep.HourDataPrep(retroLen=64, classPcnt=0.003, ahead=2)
+    #hdf.readData('data/hs300_hours_tech.xlsx', 'c:h,k:u')
+    hdf.readData('data/000300hdw.xlsx', 'a,c:g,j:t,v:aj,al:az')
+    cutDate = '2018-12-01'
 
     model = trainModel(hdf, cutDate)
     # try predict with last data entry
